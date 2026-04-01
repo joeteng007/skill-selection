@@ -113,15 +113,16 @@ class SkillAnalyzer:
         return result
     
     def _check_thresholds(self, result: Dict, skill_data: Dict):
-        """检查基础门槛"""
+        """检查基础门槛（如果数据可用）"""
         stars = skill_data.get('stars', 0)
         lines = skill_data.get('skill_md_lines', 0)
         
-        if stars < self.config.min_stars:
+        # 只有当数据可用时才检查（>0 表示已获取）
+        if stars > 0 and stars < self.config.min_stars:
             result['issues'].append(f'Stars 不足 ({stars} < {self.config.min_stars})')
-        if lines < self.config.min_lines:
+        if lines > 0 and lines < self.config.min_lines:
             result['issues'].append(f'内容太短 ({lines} < {self.config.min_lines})')
-        if lines > self.config.max_lines:
+        if lines > 0 and lines > self.config.max_lines:
             result['issues'].append(f'内容过长 ({lines} > {self.config.max_lines})')
     
     def _detect_language(self, content: str) -> Optional[str]:

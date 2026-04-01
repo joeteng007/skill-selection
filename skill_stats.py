@@ -169,22 +169,55 @@ class GitHubStatsFetcher:
 # ==================== 解析器 ====================
 
 class AwesomeListParser:
-    """解析 awesome-list README.md"""
+    """解析 awesome-list README.md（包括分类子页面）"""
     
     def __init__(self, repo_path: str):
         self.repo_path = Path(repo_path)
         self.readme_path = self.repo_path / "README.md"
+        self.categories_dir = self.repo_path / "categories"
     
     def parse(self) -> List[Dict[str, str]]:
-        """解析 README.md 返回技能列表"""
-        if not self.readme_path.exists():
-            raise FileNotFoundError(f"README.md not found: {self.readme_path}")
+        """解析 README.md + 所有分类子页面"""
+        all_skills = []
+        seen_urls = set()
         
-        content = self.readme_path.read_text(encoding='utf-8')
+        # 1. 解析主 README
+        if self.readme_path.exists():
+            content = self.readme_path.read_text(encoding='utf-8')
+            skills = self._parse_content(content, "README")
+            for s in skills:
+                url = s.get('github_url') or s.get('clawhub_url', '')
+                if url not in seen_urls:
+                    all_skills.append(s)
+                    seen_urls.add(url)
+        
+        # 2. 解析所有分类子页面
+        if self.categories_dir.exists():
+            for cat_file in self.categories_dir.glob("*.md"):
+                try:
+                    content = cat_file.read_text(encoding='utf-8')
+                    category_name = cat_file.stem.replace('-', ' ').title()
+                    skills = self._parse_content(content, category_name)
+                    for s in skills:
+                        url = s.get('github_url') or s.get('clawhub_url', '')
+                        if url not in seen_urls:
+                            s['category'] = category_name  # 使用分类文件名
+                            all_skills.append(s)
+                            seen_urls.add(url)
+                except Exception as e:
+                    print(f"  ⚠️  解析失败 {cat_file.name}: {e}")
+        
+        return all_skills
+    
+    def _parse_content(self, content: str, default_category: str) -> List[Dict[str, str]]:
+        """解析单个文件内容（支持 GitHub 和 ClawHub 链接）"""
         skills = []
-        current_category = "Uncategorized"
+        current_category = default_category
         
+        # GitHub 链接
         github_pattern = r'\[([^\]]+)\]\((https://github\.com/[^)]+)\)'
+        # ClawHub/ClawSkills 链接
+        clawhub_pattern = r'\[([^\]]+)\]\((https://clawskills\.sh/skills/[^)]+)\)'
         
         for line in content.split('\n'):
             # 检测分类标题
@@ -202,7 +235,19 @@ class AwesomeListParser:
                         'name': name,
                         'github_url': url,
                         'category': current_category,
+                        'source_type': 'github',
                     })
+            
+            # 提取 ClawHub 链接
+            for match in re.finditer(clawhub_pattern, line):
+                name = match.group(1).strip()
+                url = match.group(2).strip()
+                skills.append({
+                    'name': name,
+                    'clawhub_url': url,
+                    'category': current_category,
+                    'source_type': 'clawhub',
+                })
         
         return skills
     
