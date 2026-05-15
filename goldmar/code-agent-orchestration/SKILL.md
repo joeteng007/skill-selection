@@ -1,0 +1,166 @@
+---
+name: Code Agent Orchestration
+description: Skill for orchestrating coding agent sessions from OpenClaw. Covers launching, monitoring, plan approval, lifecycle management, and worktree decisions.
+metadata:
+  openclaw:
+    homepage: https://github.com/goldmar/openclaw-code-agent
+    requires:
+      bins:
+        - openclaw
+    install:
+      - kind: node
+        package: openclaw-code-agent
+        bins: []
+---
+
+# Code Agent Orchestration
+
+Use `openclaw-code-agent` to run Claude Code or Codex sessions as background coding jobs from chat.
+
+## Launch
+
+- Do not pass `channel` manually. Routing comes from `agentChannels`, the current chat context, and `fallbackChannel`.
+- Sessions are multi-turn. Continue existing work with `agent_respond` or `agent_launch(..., resume_session_id=...)`; do not start a fresh session for the same task.
+- Always set a short kebab-case `name` when you care about later follow-up.
+- Set `workdir` to the target repo.
+- Use `permission_mode: "plan"` when the user wants a real review gate before implementation.
+- Use `permission_mode: "bypassPermissions"` only for autonomous execution.
+- `defaultWorktreeStrategy` now defaults to `off`. Opt into a worktree strategy explicitly when you want branch isolation.
+- In `plan` mode, the plan belongs in normal session output. Do not ask the coding agent to write plan docs or transcript artifacts unless the user explicitly asked for a file.
+
+Example:
+
+```text
+agent_launch(
+  prompt: "Fix the auth middleware bug and add tests",
+  name: "fix-auth",
+  workdir: "/home/user/projects/my-app"
+)
+```
+
+## Resume, Don't Respawn
+
+When a session already exists for the task, keep using it.
+
+- Waiting for plan approval: `agent_respond(session, message, approve=true)` or `agent_request_plan_approval(...)` if delegated approval must escalate to the user
+- Waiting for a question answer: `agent_respond(session, message)`
+- Killed/stopped by restart: `agent_respond(session, message)`
+- Completed but needs follow-up: `agent_launch(resume_session_id=session_id, prompt="...")`
+- Fresh `agent_launch` is only for genuinely independent work
+
+Do not launch a new coding session from a wake event for the same task.
+
+## State and Monitoring
+
+Use:
+
+```text
+agent_sessions()
+agent_output(session: "fix-auth", lines: 100)
+agent_output(session: "fix-auth", full: true)
+```
+
+Treat these wake fields as authoritative state when present:
+
+- `requestedPermissionMode`
+- `effectivePermissionMode` / `currentPermissionMode`
+- `approvalExecutionState`
+
+Use those deterministic fields instead of inferring behavior from transcript fragments.
+
+Approval/execution meanings:
+
+- `approved_then_implemented`: normal approved execution
+- `implemented_without_required_approval`: actual approval bypass
+- `awaiting_approval`: still stopped at the approval gate
+- `not_plan_gated`: no plan gate applied
+
+Completion ownership:
+
+- The plugin sends the canonical completion notification.
+- The orchestrator should only add user-facing follow-up when there is real extra value: synthesis, risk framing, or concrete next steps.
+- Do not generate your own heuristic completion summary from transcript tail lines.
+
+## Respond Rules
+
+Auto-respond immediately only for:
+
+- permission requests for file reads, writes, or shell commands
+- explicit continuation prompts such as "Should I continue?"
+
+Forward everything else to the user:
+
+- architecture or design choices
+- destructive operations
+- scope changes
+- credentials or production questions
+- ambiguous requirements
+
+When forwarding, quote the session's exact question. Do not add commentary.
+
+## Plan Approval
+
+Use `permission_mode: "plan"` whenever the user wants a real planning checkpoint.
+
+### `planApproval: "ask"`
+
+- Approval belongs to the user.
+- The plugin sends the canonical Approve / Revise / Reject prompt directly to the user.
+- Wait for the user's answer, then forward it with `agent_respond(...)`.
+- Do not send a duplicate approval recap or second approval prompt.
+
+### `planApproval: "delegate"`
+
+- Approval belongs to the orchestrator first.
+- This is wake-first: the plugin wakes the orchestrator without user buttons.
+- Before deciding, read the full plan with `agent_output(session, full=true)`; do not rely on the truncated preview.
+- Approve directly with `agent_respond(..., approve=true)` only when the plan is clearly in-bounds and low risk.
+- If escalation is needed, call `agent_request_plan_approval(session='...', summary='...')` exactly once so the plugin sends the single canonical user approval prompt.
+- After that canonical prompt exists, wait for the user's decision; do not send a second plain-text approval summary.
+
+### `planApproval: "approve"`
+
+- Auto-approve only after verification per the session policy.
+
+## Worktree Decisions
+
+### `off`
+
+- No worktree. The session runs in the main checkout.
+
+### `ask`
+
+- The plugin owns the user-facing completion/decision message and button UI.
+- Do not call `agent_merge` or `agent_pr` unless the user explicitly asks after that.
+
+### `delegate`
+
+- The plugin wakes the orchestrator with diff context and no automatic user buttons.
+- Read the diff context and decide whether a local merge is clearly safe.
+- `agent_merge` is acceptable for low-risk, clearly scoped changes that match the task.
+- Never call `agent_pr()` autonomously in delegate flows. Escalate PR decisions to the user.
+- If the wake already says the plugin sent the canonical completion notification, only add user-facing follow-up when you have real extra value.
+
+### `manual`
+
+- Wait for an explicit user request before calling `agent_merge` or `agent_pr`.
+
+### Never
+
+- Never use raw `git merge` or raw PR commands in place of plugin tools.
+- Never invent your own workaround for a pending worktree decision; use `agent_worktree_cleanup(session: "...", dismiss_session: true)` to dismiss permanently.
+- Never merge or PR an `ask` worktree behind the user's back.
+
+## File Artifact Policy
+
+- Do not ask the coding agent to write planning documents, investigation notes, or analysis artifacts as files unless the user explicitly requested a file.
+- Do not commit planning documents, investigation notes, or transcript-summary artifacts to the branch.
+- Commit only actual code, configuration, tests, and explicitly requested documentation.
+
+## Anti-Patterns
+
+- Do not pass `multi_turn` or `multi_turn_disabled`; all sessions are multi-turn.
+- Do not pass `channel` manually unless you are debugging routing.
+- Do not auto-answer design or scope questions.
+- Do not infer approval/completion ownership from old transcript snippets when deterministic fields are present.
+- Do not post duplicate completion or approval recaps when the plugin already sent the canonical message.

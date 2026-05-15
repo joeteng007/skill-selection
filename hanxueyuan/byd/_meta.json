@@ -1,0 +1,11 @@
+{
+  "owner": "hanxueyuan",
+  "slug": "byd",
+  "displayName": "BYD",
+  "latest": {
+    "version": "0.1.1",
+    "publishedAt": 1774307360412,
+    "commit": "https://github.com/openclaw/skills/commit/c8305e49d0655b2069decc69df33a39247bac8f0"
+  },
+  "history": []
+}

@@ -1,0 +1,11 @@
+{
+  "owner": "hanxueyuan",
+  "slug": "pepsi",
+  "displayName": "Pepsi",
+  "latest": {
+    "version": "0.1.0",
+    "publishedAt": 1774385947362,
+    "commit": "https://github.com/openclaw/skills/commit/f3328f18f1f091809cde8f5d8f74af814e0f6240"
+  },
+  "history": []
+}

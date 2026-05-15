@@ -1,0 +1,11 @@
+{
+  "owner": "hanxueyuan",
+  "slug": "tsmc",
+  "displayName": "tsmc",
+  "latest": {
+    "version": "0.1.0",
+    "publishedAt": 1774661975841,
+    "commit": "https://github.com/openclaw/skills/commit/200f9885b3c4de6fddcbd6a49437b78ce3740b2c"
+  },
+  "history": []
+}

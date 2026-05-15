@@ -1,0 +1,11 @@
+{
+  "owner": "xchicky",
+  "slug": "taobao-shop-price",
+  "displayName": "Taobao Jd Pinduoduo Shop Price",
+  "latest": {
+    "version": "1.0.3",
+    "publishedAt": 1775115071902,
+    "commit": "https://github.com/openclaw/skills/commit/fb9d0ad76026a960b2a546d09ad358733ea470bd"
+  },
+  "history": []
+}

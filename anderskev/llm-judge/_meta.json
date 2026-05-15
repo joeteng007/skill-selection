@@ -1,0 +1,11 @@
+{
+  "owner": "anderskev",
+  "slug": "llm-judge",
+  "displayName": "Llm Judge",
+  "latest": {
+    "version": "1.0.0",
+    "publishedAt": 1773992817414,
+    "commit": "https://github.com/openclaw/skills/commit/62039b81f3f98c708451fa0594515d8a5c8eca77"
+  },
+  "history": []
+}
